@@ -86,5 +86,3 @@ for idx, event in enumerate(dataProviderRNOG.run()):
     event[ep.csw_impulsivity] = csw_impulsivity 
     event[ep.surf_corr_ratio] = surf_corr_ratio
     event[ep.max_surf_corr] = max_surf_corr
-    
-    print(event.get_id())
