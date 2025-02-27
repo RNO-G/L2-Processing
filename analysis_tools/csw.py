@@ -54,6 +54,8 @@ class CSW:
 
         return t_ab, score 
 
+    #code originally written by the ARA collaboration, thank you
+    #https://github.com/ara-software/AraProc/blob/61ba9aef48170f9a35dfbe2441c604b50d13d283/araproc/analysis/standard_reco.py 
     
     def get_arrival_delays_AraRoot_xcorr(
         self, channel_signals, channel_times, channels_to_include, reference_ch, reco_delays, solution, channel_positions, cable_delays, station_id, ttcs, score, t_ab
