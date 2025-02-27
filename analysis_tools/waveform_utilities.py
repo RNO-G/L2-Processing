@@ -1,5 +1,8 @@
 import numpy as np 
 
+#code originally written by ARA collaboration, thank you
+#https://github.com/ara-software/AraProc/blob/61ba9aef48170f9a35dfbe2441c604b50d13d283/araproc/framework/waveform_utilities.py
+
 def get_freqs(times):
     # really simple function to get the frequencies
     nsamples = len(times)
