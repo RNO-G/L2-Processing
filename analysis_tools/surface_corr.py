@@ -1,6 +1,9 @@
 import defs
 import math
 
+#code adapted from ARA collaboration, thank you 
+#https://github.com/ara-software/AraProc/blob/61ba9aef48170f9a35dfbe2441c604b50d13d283/araproc/analysis/standard_reco.py
+
 class SurfaceCorr:
 
     def __init__(self):
