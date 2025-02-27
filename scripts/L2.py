@@ -15,6 +15,9 @@ import logging
 import NuRadioReco.modules.RNO_G.channelGlitchDetector
 from NuRadioReco.examples.RNOG.processing import process_event
 
+#code adapted from ARA collaboration code, thank you
+#https://github.com/ara-software/FiveStation/blob/main/scripts/L2/L2.py
+
 detectorpath = "/data/i3store/users/avijai/RNO_season_2023.json"
 csw_info = {
   "PA" : [0,1,2,3],
