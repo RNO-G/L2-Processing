@@ -1,8 +1,8 @@
 import defs
 import math
-
-#code adapted from ARA collaboration, thank you 
-#https://github.com/ara-software/AraProc/blob/61ba9aef48170f9a35dfbe2441c604b50d13d283/araproc/analysis/standard_reco.py
+import time
+import numpy as np
+from detector import get_channel_positions,calculate_avg_antenna_xyz
 
 class SurfaceCorr:
 
@@ -12,32 +12,45 @@ class SurfaceCorr:
     def run(self, station_id, channels_to_include, intmap, maxcorr, radius, det):
         
         radius *= defs.cvac
-        _, _, avg_z = det.calculate_avg_antenna_xyz(station_id, channels_to_include)
-        
-        if radius < (abs(avg_z) + self.z_thresh):
-            return -np.inf, 0, 0 # surface not visible, this map has no surface corr max
-        
-        theta_thresh = math.asin((abs(avg_z) + self.z_thresh) / radius)
-        row, col = intmap["map"].shape
-        
-        max_surf_corr = -2
-        max_theta = 0
-        max_phi = 0
 
-        for r in range(row):
-            for c in range(col):
-                if (intmap["elevation"][c] >= theta_thresh):
-                    if (intmap["map"][r][c] > max_surf_corr):
-                        max_surf_corr = intmap["map"][r][c]
-                        max_theta = intmap["elevation"][c]
-                        max_phi = intmap["azimuth"][r]
+        
+        _, _, avg_z = calculate_avg_antenna_xyz(det, station_id, [0])
+
+        
+        
+        z_thresh = (abs(avg_z) + self.z_thresh) / defs.cvac
+         
+        z_thresh_up = (abs(avg_z) - self.z_thresh) / defs.cvac
+        
+
+        row, col = intmap["map"].shape
+        cols = np.where(np.logical_and(intmap["z"].flatten() >= z_thresh, intmap["z"].flatten() <= z_thresh_up))        
+        surf_array = (intmap["map"])[:row, min(cols[0]):max(cols[0])+1]
+        max_surf_corr = np.max(surf_array)
+
+        maxind = np.unravel_index(np.argmax(surf_array), surf_array.shape)
+        max_z = intmap["z"].flatten()[min(cols[0]):max(cols[0])+1][maxind[1]]
+        max_r = intmap["r"].flatten()[:row][maxind[0]]
+    
+
+        cols2 = np.where(intmap["z"].flatten() >= z_thresh)
+        surf_array2 = (intmap["map"])[:row, min(cols2[0]):max(cols2[0])+1]
+        max_surf_corr_2 = np.max(surf_array2)
+        maxind2 = np.unravel_index(np.argmax(surf_array2), surf_array2.shape)
+        max_z_2 = intmap["z"].flatten()[min(cols2[0]):max(cols2[0])+1][maxind2[1]],
+        max_r_2 = intmap["r"].flatten()[maxind2[0]]
+        
+        
 
         if (maxcorr != 0):
             surf_corr_ratio = max_surf_corr / maxcorr 
+            surf_corr_ratio_2 = max_surf_corr_2 / maxcorr
         else:
             surf_corr_ratio = np.inf 
-
-        return surf_corr_ratio, max_surf_corr 
+            surf_corr_ratio_2 = np.inf
+        
+        
+        return surf_corr_ratio, max_surf_corr, surf_corr_ratio_2, max_surf_corr_2, max_r * defs.cvac, max_z * defs.cvac, max_z_2[0] * defs.cvac, max_r_2 * defs.cvac
 
     
 

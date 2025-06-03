@@ -1,8 +1,5 @@
 import numpy as np
 
-#code originally written by the ARA collaboration, thank you
-#https://github.com/ara-software/AraProc/blob/61ba9aef48170f9a35dfbe2441c604b50d13d283/araproc/analysis/snr.py
-
 class SNR:
 
     def __init__(self, nsegs=8):
@@ -35,7 +32,7 @@ class SNR:
 
         snr = vpp/rms/2.0
 
-        return snr
+        return snr, vpp, rms
 
     def vpp(self, event, station):
 

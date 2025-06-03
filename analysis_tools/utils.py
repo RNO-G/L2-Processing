@@ -4,18 +4,16 @@ import defs, utils, os, pickle, math
 from propagation import TravelTimeCalculator
 from scipy import integrate
 import math
+import dask.array as da 
+import zarr 
 
 def load_ttcs(mappath, channels_to_include):
     # load travel time maps
-    
-    map_data = mappath
-
     ttcs = {}
-    for channel in channels_to_include:        
-        if not channel in map_data:
-            raise RuntimeError(f"Error: No travel time map available for channel {channel}!")
-        ttcs[channel] = TravelTimeCalculator.FromDict(map_data[channel])
-        
+    for ch in channels_to_include:
+        path = mappath + f'ttimes_{ch}.zarr'
+        z = zarr.open(path, mode = "r")
+        ttcs[ch] = z[:]
     return ttcs
 
 def resample(tvals, sig, target_dt):
@@ -37,8 +35,9 @@ def resample(tvals, sig, target_dt):
 
 def to_antenna_rz_coordinates(pos, antenna_pos):
     local_r = np.linalg.norm(pos[:, :2] - antenna_pos[:2], axis = 1)
-    local_z = pos[:, 2] 
-     
+    local_z = pos[:, 2]
+
+
     return np.stack([local_r, local_z], axis = -1)
     
 def get_maxcorr_point(intmap):
@@ -46,13 +45,10 @@ def get_maxcorr_point(intmap):
     mapdata = intmap["map"]    
     maxind = np.unravel_index(np.argmax(mapdata), mapdata.shape)
     
-    #maxcorr_point = {"r": np.sqrt((intmap["x"][maxind[0]])**2 + (intmap["y"][maxind[1]]**2)),
-    #                 "z": intmap["z"][maxind[2]]}
-
-    #maxcorr_point = {"r": intmap["r"][maxind[3]],"z":intmap["z"][maxind[1]]}
 
     maxcorr_point = {"elevation": intmap["elevation"][maxind[1]],
                      "azimuth": intmap["azimuth"][maxind[0]]}
+    
 
     return maxcorr_point, mapdata[maxind[0]][maxind[1]]
 
@@ -82,5 +78,5 @@ def ang2_to_cart(z, r, azimuth, origin_xyz):
     yy = r * np.sin(azimuth)
     zz = z
 
-    xyz = np.stack([xx, yy, zz], axis = -1) + origin_xyz
+    xyz = np.stack([xx, yy, zz], axis = -1) + origin_xyz 
     return xyz

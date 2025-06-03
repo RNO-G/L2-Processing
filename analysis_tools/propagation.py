@@ -1,5 +1,8 @@
 import pykonal, copy
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator
+import gc 
+import dask.array as da
 
 class TravelTimeCalculator:
 
@@ -7,10 +10,12 @@ class TravelTimeCalculator:
 
     @classmethod
     def FromDict(cls, indict):
+        print(indict["r_max"], indict['z_range'], indict['num_pts_z'], indict['num_pts_r'], indict["tx_z"])
+
         obj = cls(**indict)
         return obj
     
-    def __init__(self, tx_z, z_range, r_max, num_pts_z, num_pts_r, travel_time_maps = {}):
+    def __init__(self, tx_z, z_range, r_max, num_pts_z, num_pts_r, travel_time_maps = {}, r_vals = [], z_vals = []):
 
         self.tx_z = tx_z
         self.tx_pos = [0.0, self.tx_z]
@@ -21,34 +26,32 @@ class TravelTimeCalculator:
         self.z_range = z_range
         self.r_max = r_max
 
+        self.r_vals = np.linspace(0, r_max, num_pts_r)
+        self.z_vals = np.linspace(z_range[0], z_range[1], num_pts_z)
+        
+        
         self.domain_start = np.array([0.0, self.z_range[0]])
         self.domain_end = np.array([self.r_max, self.z_range[1]])
         self.domain_shape = np.array([self.num_pts_r, self.num_pts_z])    
 
         # determine voxel size
         self.delta_r = self.r_max / self.num_pts_r
+
         self.delta_z = (self.z_range[1] - self.z_range[0]) / self.num_pts_z
         
         self.travel_time_maps = travel_time_maps
-        self.tangent_vectors = {}
 
-        self._build_tangent_vectors()
 
     def to_dict(self):        
-        return copy.deepcopy({
+        return {
             "tx_z": self.tx_z,
             "z_range": self.z_range,
             "r_max": self.r_max,
             "num_pts_z": self.num_pts_z,
             "num_pts_r": self.num_pts_r,
             "travel_time_maps": self.travel_time_maps
-        })
-
-    def _build_tangent_vectors(self):
-        for comp_name, comp_map in self.travel_time_maps.items():            
-            grad_r, grad_z = np.gradient(comp_map[:,:,0], self.delta_r, self.delta_z)
-            grad_vec = np.stack([grad_r, grad_z], axis = -1)
-            self.tangent_vectors[comp_name] = -grad_vec # keep the negative to make it point towards the antenna
+        }
+    
     
     def set_ior_and_solve(self, ior, reflection_at_z = 0.0):
 
@@ -76,11 +79,12 @@ class TravelTimeCalculator:
         solver.unknown[*src_ind] = False    
         solver.trial.push(*src_ind)
         solver.solve()
-
-        self.travel_time_maps["direct_air"] = np.copy(solver.traveltime.values)
-        self.travel_time_maps["direct_air"][:, :boundary_z_ind, :] = np.nan # this is now unphysical in the ice, as in part of the volume
-                                                                            # head-waves will overtake the direct bending modes
         
+        combined_map = np.full_like(solver.traveltime.values.astype(np.float32), np.nan)
+        combined_map[:, boundary_z_ind:, :] = solver.traveltime.values.astype(np.float32)[:, boundary_z_ind:, :]
+        del solver
+        gc.collect()
+
         # Calculate direct rays in the ice
         iordata[:, boundary_z_ind:, :] = 10.0 # assign a spuriously large IOR to the air to make sure there are no head waves
                                               # that can overtake the bulk-bending modes that we want
@@ -92,26 +96,18 @@ class TravelTimeCalculator:
         solver.trial.push(*src_ind)
         solver.solve()
 
-        self.travel_time_maps["direct_ice"] = np.copy(solver.traveltime.values)
-        self.travel_time_maps["direct_ice"][:, boundary_z_ind+1:, :] = np.nan # this is now unphysical in the air
         
-        # Calculate reflected rays: place a line source at the air/ice boundary
-        solver = _get_solver(iordata)
-        solver.traveltime.values[:, boundary_z_ind, :] = self.travel_time_maps["direct_ice"][:, boundary_z_ind, :]
-        solver.unknown[:, boundary_z_ind, :] = False
-        for r_ind in range(self.num_pts_r):
-            solver.trial.push(r_ind, boundary_z_ind, 0)
-        solver.solve()
+        combined_map[:, :boundary_z_ind, :] = solver.traveltime.values.astype(np.float32)[:, :boundary_z_ind, :]
+        del solver
+        gc.collect()
+        
+        self.travel_time_maps["direct_combined"] = combined_map
 
-        self.travel_time_maps["reflected"] = np.copy(solver.traveltime.values)
-        self.travel_time_maps["reflected"][:, boundary_z_ind:, :] = np.nan # this is now unphysical in the air
 
-        self._build_tangent_vectors()
-
-    def get_ind(self, coord):
+    def get_ind(self, coord): 
         return np.transpose(self._coord_to_pixel(coord))        
         
-    def get_travel_time(self, coord, comp = "direct_ice"):
+    def get_travel_time(self, coord, comp = "direct_combined"):
 
         if comp not in self.travel_time_maps:
             raise RuntimeError(f"Error: map for component '{comp}' not available!")
@@ -120,10 +116,10 @@ class TravelTimeCalculator:
 
         return self.travel_time_maps[comp][*ind]
 
-    def get_travel_time_ind(self, ind, comp = "direct_ice"):
+    def get_travel_time_ind(self, ind, comp = "direct_combined"):
         return self.travel_time_maps[comp][*ind]
     
-    def get_tangent_vector(self, coord, comp = "direct_ice"):
+    def get_tangent_vector(self, coord, comp = "direct_combined"):
 
         if comp not in self.travel_time_maps:
             raise RuntimeError(f"Error: map for component '{comp}' not available!")
@@ -136,10 +132,12 @@ class TravelTimeCalculator:
         
     def _coord_to_pixel(self, coord):
         return self._coord_to_frac_pixel(coord).astype(int)
-        
+    
+    
     def _coord_to_frac_pixel(self, coord):        
         if isinstance(coord, list):
             coord = np.array(coord)
+        
         
         pixel_2d = (coord - self.domain_start) / (self.domain_end - self.domain_start) * self.domain_shape
         pixel_3d = np.append(pixel_2d, np.zeros((len(coord), 1)), axis = 1)

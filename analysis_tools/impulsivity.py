@@ -8,9 +8,6 @@ from scipy.stats import chi2
 import ROOT
 from scipy.signal import hilbert
 
-#code original written by the ARA collaboration, thank you
-#https://github.com/ara-software/AraProc/blob/61ba9aef48170f9a35dfbe2441c604b50d13d283/araproc/analysis/impulsivity.py
-
 class Impulsivity:
     
     def erf_linear(x, A, B):
