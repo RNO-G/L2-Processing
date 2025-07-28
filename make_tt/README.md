@@ -1,1 +1,1 @@
-
+To make a delay time map, run make_map.py. Specify the channels, calibrated position files for the station in make_map.py. In reco.py, specify the ice model as defined in defs.py and the number of points in R and Z. In propagation.py, specify the path to where the travel times will be saved. 
