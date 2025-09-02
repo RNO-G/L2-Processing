@@ -24,7 +24,7 @@ def ior_greenland_simple(z):
         rho0 = 917
         #rho0 = (0.78 * 602)/0.51
         z0 = 37.25
-        rho = rho0 - A * np.exp(z * cvac / z0 * cvac)
+        rho = rho0 - A * np.exp(z * cvac / z0)
         return 1 + 0.78 * (rho / rho0)
         
     
